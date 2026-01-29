@@ -1,0 +1,34 @@
+version: '3.8'
+
+services:
+  web:
+    build: .
+    image: simple-html-app:latest
+    container_name: simple-html-container
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - webnet
+    # volumes:
+    #   - ./logs:/var/log/nginx
+
+  # Пример добавления другого сервиса
+  # monitor:
+  #   image: dockersamples/visualizer
+  #   ports:
+  #     - "8081:8080"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #   networks:
+  #     - webnet
+
+networks:
+  webnet:
+    driver: bridge
