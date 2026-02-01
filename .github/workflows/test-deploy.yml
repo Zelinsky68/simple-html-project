@@ -1,19 +1,31 @@
-name: Test Connection
+name: Test Deployment
 
-on:
-  push:
-    branches: [main]
+on: push
 
 jobs:
   test:
     runs-on: ubuntu-latest
     
     steps:
-    - name: Checkout
+    - name: 📥 Checkout
       uses: actions/checkout@v4
-    
-    - name: Show Kubernetes Info
+      
+    - name: 📁 Show structure
       run: |
-        echo "Testing GitHub Actions..."
-        echo "If you see this, workflow works!"
-        echo "Next: add KUBECONFIG secret to deploy to Kubernetes"
+        echo "Project structure:"
+        find . -type f -name "*.yml" -o -name "*.yaml" -o -name "Dockerfile" -o -name "*.html" | head -20
+        
+    - name: 🐳 Test Docker build
+      run: |
+        if [ -f Dockerfile ]; then
+          echo "Building Docker image..."
+          docker build -t test-image .
+          echo "✅ Docker build successful"
+        else
+          echo "⚠️ No Dockerfile found"
+        fi
+        
+    - name: ✅ Final message
+      run: |
+        echo "🎉 Workflow completed successfully!"
+        echo "Next step: add Kind and Kubernetes"
