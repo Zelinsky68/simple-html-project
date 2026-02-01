@@ -1,0 +1,104 @@
+name: Build and Deploy with Kind
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+    - name: 🛠️ Checkout code
+      uses: actions/checkout@v4
+    
+    - name: 🐳 Set up Docker
+      uses: docker/setup-buildx-action@v3
+    
+    - name: 🚀 Set up Kind
+      uses: container-tools/kind-action@v1
+      with:
+        version: v0.20.0
+    
+    - name: 📦 Create Kind Cluster
+      run: |
+        kind create cluster --name github-ci --wait 5m
+        kubectl cluster-info --context kind-github-ci
+        
+    - name: 🏗️ Build Docker Image
+      run: |
+        docker build -t simple-html-app:latest .
+        
+    - name: 📤 Load Image to Kind
+      run: |
+        kind load docker-image simple-html-app:latest --name github-ci
+        
+    - name: 🚀 Deploy Application
+      run: |
+        # Создаем манифест для деплоя
+        cat <<EOF | kubectl apply -f -
+        apiVersion: v1
+        kind: ConfigMap
+        metadata:
+          name: html-content
+        data:
+          index.html: |
+            $(cat index.html)
+        ---
+        apiVersion: apps/v1
+        kind: Deployment
+        metadata:
+          name: simple-html-app
+        spec:
+          replicas: 1
+          selector:
+            matchLabels:
+              app: simple-html
+          template:
+            metadata:
+              labels:
+                app: simple-html
+            spec:
+              containers:
+              - name: web
+                image: simple-html-app:latest
+                imagePullPolicy: Never  # Используем локальный образ
+                ports:
+                - containerPort: 80
+                volumeMounts:
+                - name: html-volume
+                  mountPath: /usr/share/nginx/html
+              volumes:
+              - name: html-volume
+                configMap:
+                  name: html-content
+        ---
+        apiVersion: v1
+        kind: Service
+        metadata:
+          name: simple-html-service
+        spec:
+          selector:
+            app: simple-html
+          ports:
+          - port: 80
+            targetPort: 80
+          type: ClusterIP
+        EOF
+        
+        # Ждем запуска пода
+        kubectl wait --for=condition=ready pod -l app=simple-html --timeout=120s
+        
+        echo "✅ Deployment completed!"
+        kubectl get all
+        
+    - name: 🧪 Run Tests
+      run: |
+        # Проверяем доступность приложения
+        kubectl run test --image=alpine/curl --restart=Never --rm -i -- curl -s http://simple-html-service | head -20
+        
+    - name: 🧹 Cleanup
+      if: always()
+      run: |
+        kind delete cluster --name github-ci
